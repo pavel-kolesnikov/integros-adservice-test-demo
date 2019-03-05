@@ -4,5 +4,5 @@ A little API test demo for Integros Adservice.
 
 ```
 bundle
-ruby main.rb
+API_KEY=XXXXXXXX ruby main.rb
 ```
