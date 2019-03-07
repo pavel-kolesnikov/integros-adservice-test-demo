@@ -1,8 +1,8 @@
 require 'json'
 require 'open-uri'
 require 'timeout'
-
 require "minitest/autorun"
+
 require 'nokogiri'
 
 class API
@@ -22,19 +22,6 @@ class API
         resp = req.read
         json = JSON.parse(resp)
         json['result']
-    end
-
-    def switch_platform!(platform)
-        case platform
-        when nil
-            @headers.delete("User-Agent")
-        when :desktop
-            @headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246"
-        when :mobile
-            @headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 8.0.0; SM-G960F Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.84 Mobile Safari/537.36"
-        else
-            raise ArgumentError, "Platform could be :desktop or :mobile, got #{platform}"
-        end
     end
 end
 
@@ -119,9 +106,9 @@ class TestTargets < Minitest::Test
 end
 
 class TestAdservice < Minitest::Test
-    @@PRECISION_TRESHOLD = 0.01
+    @@PRECISION_TRESHOLD = 0.02
     @@MINIMUM_HITS = 20
-    @@REQUESTS_LIMIT = 1000
+    @@REQUESTS_LIMIT = 5000
 
     [
         {label: "z1", publisher: "9251467", zone: "5694015", targets: {
@@ -142,15 +129,15 @@ class TestAdservice < Minitest::Test
     ].each do |ctx|
         define_method "test_#{ctx[:label]}" do
             api = make_api
-            api.switch_platform!(ctx[:platform]) if ctx[:platform]
+            headers = switch_platform!(Hash.new(), ctx[:platform])
 
             vast_url = api.zone_link(ctx[:publisher], ctx[:zone])
             targets = Targets.new(@@MINIMUM_HITS, @@PRECISION_TRESHOLD, ctx[:targets])
 
-            while not targets.satisfied?
+            until targets.satisfied?
                 raise "Targets are not satisfied in #{@@REQUESTS_LIMIT} hits. #{targets}" if targets.hits > @@REQUESTS_LIMIT
 
-                xml = open(vast_url).read
+                xml = open(vast_url, headers).read
                 doc = Nokogiri.XML(xml)
                 banner_id = doc.search('ClickThrough').text.strip
                 targets.record(banner_id)
@@ -164,5 +151,19 @@ class TestAdservice < Minitest::Test
         api_url = ENV['API_URL'] || 'https://api.integros.io'
         api_key = ENV['API_KEY']
         API.new(api_url, api_key)
+    end
+
+    def switch_platform!(headers, platform)
+        case platform
+        when nil
+            headers.delete("User-Agent")
+        when :desktop
+            headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246"
+        when :mobile
+            headers["User-Agent"] = "Mozilla/5.0 (Android 9; Mobile; rv:65.0) Gecko/65.0 Firefox/65.0"
+        else
+            raise ArgumentError, "Platform could be :desktop or :mobile, got #{platform}"
+        end
+        headers
     end
 end
